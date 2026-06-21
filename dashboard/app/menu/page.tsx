@@ -28,7 +28,7 @@ export default function MenuPage() {
 
   const fetchMenu = async () => {
     try {
-      const { data } = await api.get('/menu/all');
+      const { data } = await api.get('/menu');
       setItems(data);
     } catch (err) {
       console.error('Failed to fetch menu');

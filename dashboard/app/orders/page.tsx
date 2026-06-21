@@ -1,6 +1,5 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
-import { io, Socket } from 'socket.io-client';
 import DashboardLayout from '@/components/DashboardLayout';
 import api from '@/lib/api';
 
@@ -22,7 +21,6 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
-  const [socket, setSocket] = useState<Socket | null>(null);
   const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set());
   const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || '₹';
 
@@ -38,28 +36,13 @@ export default function OrdersPage() {
     }
   }, [filter]);
 
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
-
-  // Socket.io connection
-  useEffect(() => {
-    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
-    const s = io(socketUrl);
-    setSocket(s);
-
-    s.on('connect', () => s.emit('join_orders_room'));
-
-    s.on('new_order', (order: any) => {
-      setOrders((prev) => [order, ...prev]);
-      setNewOrderIds((prev) => new Set([...prev, order._id]));
-      setTimeout(() => setNewOrderIds((prev) => { const next = new Set(prev); next.delete(order._id); return next; }), 3000);
-    });
-
-    s.on('order_status_update', ({ orderId, status }: any) => {
-      setOrders((prev) => prev.map((o) => (o._id === orderId ? { ...o, status } : o)));
-    });
-
-    return () => { s.disconnect(); };
-  }, []);
+  useEffect(() => { 
+    fetchOrders(); 
+    const interval = setInterval(() => {
+      fetchOrders();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [fetchOrders]);
 
   const handleStatusUpdate = async (orderId: string, currentStatus: string) => {
     const nextStatus = STATUS_NEXT[currentStatus];

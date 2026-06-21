@@ -1,13 +1,36 @@
-const mongoose = require('mongoose');
+import mongoose, { Document, Model } from 'mongoose';
 
-const orderItemSchema = new mongoose.Schema({
+export interface IOrderItem {
+  menuItemId: mongoose.Types.ObjectId;
+  name: string;
+  price: number;
+  qty: number;
+}
+
+export interface IOrder extends Document {
+  restaurantId: mongoose.Types.ObjectId;
+  platform: 'telegram' | 'whatsapp';
+  customerId: string;
+  customerName: string;
+  items: IOrderItem[];
+  totalPrice: number;
+  status: 'awaiting_payment' | 'pending' | 'preparing' | 'ready' | 'done';
+  payment: {
+    razorpayOrderId: string | null;
+    razorpayPaymentId: string | null;
+    paid: boolean;
+  };
+  orderNumber: number;
+}
+
+const orderItemSchema = new mongoose.Schema<IOrderItem>({
   menuItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'MenuItem' },
   name: String,
   price: Number,
   qty: { type: Number, default: 1 },
 });
 
-const orderSchema = new mongoose.Schema(
+const orderSchema = new mongoose.Schema<IOrder>(
   {
     restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant', required: true },
     platform: {
@@ -35,12 +58,11 @@ const orderSchema = new mongoose.Schema(
 );
 
 // Auto-increment order number
-orderSchema.pre('save', async function (next) {
+orderSchema.pre('save', async function () {
   if (this.isNew) {
-    const lastOrder = await this.constructor.findOne().sort({ orderNumber: -1 });
+    const lastOrder = await (this.constructor as Model<IOrder>).findOne().sort({ orderNumber: -1 });
     this.orderNumber = lastOrder ? lastOrder.orderNumber + 1 : 1001;
   }
-  next();
 });
 
-module.exports = mongoose.model('Order', orderSchema);
+export default (mongoose.models.Order as Model<IOrder>) || mongoose.model<IOrder>('Order', orderSchema);
