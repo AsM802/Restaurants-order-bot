@@ -1,11 +1,12 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import Link from 'next/link';
+import { GoogleLogin } from '@react-oauth/google';
 
 export default function RegisterPage() {
-  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', address: '', paymentNumber: '', lat: '', lng: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', paymentNumber: '', paymentQrCodeUrl: '', lat: '', lng: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -14,17 +15,39 @@ export default function RegisterPage() {
     if (localStorage.getItem('token')) router.push('/');
   }, [router]);
 
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: credentialResponse.credential }),
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('restaurant', JSON.stringify({ name: data.name || 'Google User', email: data.email || '' }));
+        router.push('/');
+      } else {
+        setError(data.msg || 'Google Sign-up failed');
+      }
+    } catch (err) {
+      setError('Error connecting to server');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const { data } = await api.post('/auth/register', form);
+      await api.post('/auth/register', form);
+      const { data } = await api.post('/auth/login', { email: form.email, password: form.password });
       localStorage.setItem('token', data.token);
       localStorage.setItem('restaurant', JSON.stringify({ name: data.name, email: data.email }));
       router.push('/');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed.');
+      setError(err.response?.data?.message || 'Registration failed. Try a different email.');
     } finally {
       setLoading(false);
     }
@@ -32,11 +55,23 @@ export default function RegisterPage() {
 
   return (
     <div className="login-page">
-      <div className="login-card fade-in">
+      <div className="login-card fade-in" style={{ maxWidth: 500 }}>
         <div className="login-header">
-          <div className="logo">🍴</div>
-          <h1>Create your Restaurant</h1>
-          <p>Sign up to start receiving orders</p>
+          <div className="logo">👨‍🍳</div>
+          <h1>Create your dashboard</h1>
+          <p>Join to start receiving orders directly</p>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
+          <GoogleLogin
+            onSuccess={handleGoogleSuccess}
+            onError={() => setError('Google Sign-up Failed')}
+            useOneTap
+          />
+        </div>
+
+        <div style={{ textAlign: 'center', marginBottom: '24px', color: 'var(--text-muted)' }}>
+          - OR -
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>
