@@ -134,11 +134,11 @@ export default function DashboardHome() {
 
         {/* Quick Help */}
         <div className="card mt-24" style={{ borderColor: 'var(--accent-glow)', borderLeft: '4px solid var(--accent)' }}>
-          <h3 style={{ fontWeight: 700, marginBottom: 12 }}>🤖 Bot Setup Reminders</h3>
+          <h3 style={{ fontWeight: 700, marginBottom: 12 }}>📝 Quick Notes</h3>
           <ul style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 2, paddingLeft: 20 }}>
-            <li>Set your <strong style={{ color: 'var(--text-primary)' }}>TELEGRAM_BOT_TOKEN</strong> in <code>backend/.env</code></li>
-            <li>Point your Twilio WhatsApp sandbox webhook to <code>https://your-server.com/api/whatsapp/webhook</code></li>
-            <li>Add your <strong style={{ color: 'var(--text-primary)' }}>MONGO_URI</strong> from MongoDB Atlas</li>
+            <li>Share your WhatsApp bot number with customers to start receiving orders directly into this dashboard.</li>
+            <li>Keep your menu updated so customers always see your latest offerings.</li>
+            <li>Orders are marked as Paid automatically when customers send a screenshot of their transaction.</li>
           </ul>
         </div>
       </div>
