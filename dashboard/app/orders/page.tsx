@@ -123,8 +123,8 @@ export default function OrdersPage() {
                     </td>
                     <td className="bold">{currency}{order.totalPrice}</td>
                     <td>
-                      <span className={`badge ${order.payment?.paid ? 'badge-ready' : 'badge-pending'}`}>
-                        {order.payment?.paid ? '✅ Paid' : '⏳ Unpaid'}
+                      <span className={`badge ${order.payment?.paymentStatus === 'Paid' ? 'badge-ready' : 'badge-pending'}`}>
+                        {order.payment?.paymentStatus === 'Paid' ? '✅ Paid' : '⏳ Unpaid'}
                       </span>
                     </td>
                     <td>
