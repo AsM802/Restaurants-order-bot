@@ -5,7 +5,7 @@ import Restaurant from '@/models/Restaurant';
 
 export async function POST(request: Request) {
   try {
-    const { name, email, password, phone, paymentNumber, lat, lng } = await request.json();
+    const { name, email, password, phone, paymentNumber, paymentQrCodeUrl, lat, lng } = await request.json();
     await connectToDatabase();
 
     let restaurant = await Restaurant.findOne({ email });
@@ -19,6 +19,7 @@ export async function POST(request: Request) {
       password, // The pre-save hook in the Restaurant model will hash this!
       phone,
       paymentNumber,
+      paymentQrCodeUrl,
       location: lat && lng ? { lat: parseFloat(lat), lng: parseFloat(lng) } : undefined
     });
 

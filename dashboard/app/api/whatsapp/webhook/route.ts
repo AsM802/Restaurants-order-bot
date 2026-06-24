@@ -63,9 +63,10 @@ export async function POST(request: Request) {
     const { MessagingResponse } = twilio.twiml;
     const twiml = new MessagingResponse();
 
-    const respond = async (msg: string) => {
+    const respond = async (msg: string, mediaUrl?: string) => {
       await session.save();
-      twiml.message(msg);
+      const message = twiml.message(msg);
+      if (mediaUrl) message.media(mediaUrl);
       return new NextResponse(twiml.toString(), { headers: { 'Content-Type': 'text/xml' } });
     };
 
@@ -86,10 +87,10 @@ export async function POST(request: Request) {
       let cartStr = '🛒 *Your Cart:*\n\n';
       let total = 0;
       session.cart.forEach((item: any, index: number) => {
-        cartStr += `${index + 1}. ${item.name} - ${process.env.RESTAURANT_CURRENCY_SYMBOL || '$'}${item.price}\n`;
+        cartStr += `${index + 1}. ${item.name} - ${process.env.RESTAURANT_CURRENCY_SYMBOL || '₹'}${item.price}\n`;
         total += item.price;
       });
-      cartStr += `\n*Total:* ${process.env.RESTAURANT_CURRENCY_SYMBOL || '$'}${total}\n\nText "order" to place the order, or "clear" to empty cart.`;
+      cartStr += `\n*Total:* ${process.env.RESTAURANT_CURRENCY_SYMBOL || '₹'}${total}\n\nText "order" to place the order, or "clear" to empty cart.`;
       return respond(cartStr);
     } else if (incomingMsg === 'menu' && session.restaurantId) {
       session.step = 'browsing_menu';
@@ -113,24 +114,51 @@ export async function POST(request: Request) {
           qty: 1
         })),
         totalPrice: totalAmount,
-        status: 'pending',
+        status: 'awaiting_payment',
         payment: {
           paymentMethod: 'ONLINE',
           paymentStatus: 'Pending'
         }
       });
 
-      session.cart = [];
-      session.step = 'browsing_menu';
+      session.step = 'awaiting_payment';
       
-      let paymentInstructions = '';
-      if (restaurant?.paymentNumber) {
-        paymentInstructions = `\n\n💳 *Payment Instructions:*\nPlease send ${process.env.RESTAURANT_CURRENCY_SYMBOL || '$'}${totalAmount} to WhatsApp Number: ${restaurant.paymentNumber}\n\nAfter paying, please reply with a screenshot of your successful transaction.`;
+      let paymentInstructions = `✅ *Order Placed! (Status: Awaiting Payment)*\n\nOrder #${newOrder.orderNumber}\nTotal: ${process.env.RESTAURANT_CURRENCY_SYMBOL || '₹'}${totalAmount}`;
+      
+      if (restaurant?.paymentQrCodeUrl) {
+        paymentInstructions += `\n\n💳 Please scan the QR code to pay ${process.env.RESTAURANT_CURRENCY_SYMBOL || '₹'}${totalAmount}. After paying, reply with a *screenshot* of your successful transaction.`;
+        return respond(paymentInstructions, restaurant.paymentQrCodeUrl);
+      } else if (restaurant?.paymentNumber) {
+        paymentInstructions += `\n\n💳 Please send ${process.env.RESTAURANT_CURRENCY_SYMBOL || '₹'}${totalAmount} to WhatsApp Number: ${restaurant.paymentNumber}\n\nAfter paying, reply with a *screenshot* of your successful transaction.`;
+        return respond(paymentInstructions);
       } else {
-        paymentInstructions = `\n\n💳 *Payment Instructions:*\nThe restaurant will contact you shortly for payment.`;
+        paymentInstructions += `\n\n💳 The restaurant will contact you shortly for payment. (Reply with any image to simulate payment for now).`;
+        return respond(paymentInstructions);
       }
+    }
 
-      return respond(`✅ *Order Placed Successfully!*\n\nOrder #${newOrder.orderNumber}\nTotal: ${process.env.RESTAURANT_CURRENCY_SYMBOL || '$'}${totalAmount}${paymentInstructions}`);
+    if (session.step === 'awaiting_payment') {
+      const numMedia = parseInt(params.get('NumMedia') || '0');
+      
+      if (incomingMsg === 'cancel') {
+         await Order.updateMany({ customerId: from.replace('whatsapp:', ''), status: 'awaiting_payment' }, { status: 'done', 'payment.paymentStatus': 'Failed' });
+         session.step = 'browsing_menu';
+         session.cart = [];
+         return respond('🚫 Order cancelled. Text "menu" to see items.');
+      }
+      
+      if (numMedia > 0) {
+        // Assume they sent a screenshot
+        await Order.updateMany(
+          { customerId: from.replace('whatsapp:', ''), status: 'awaiting_payment' },
+          { status: 'pending', 'payment.paymentStatus': 'Paid' }
+        );
+        session.step = 'browsing_menu';
+        session.cart = [];
+        return respond('🎉 *Payment Received!* Your order is now confirmed and sent to the kitchen. We will notify you when it is ready!');
+      } else {
+        return respond('📸 Please reply with a *screenshot* of your payment to confirm your order, or type "cancel" to cancel.');
+      }
     }
 
     // State Machine
@@ -225,7 +253,7 @@ export async function POST(request: Request) {
 
       let reply = '📜 *Menu:*\n\n';
       menuItems.forEach((item) => {
-        reply += `${item.displayNumber}. ${item.name} - ${process.env.RESTAURANT_CURRENCY_SYMBOL || '$'}${item.price}\n`;
+        reply += `${item.displayNumber}. ${item.name} - ${process.env.RESTAURANT_CURRENCY_SYMBOL || '₹'}${item.price}\n`;
       });
       reply += '\nReply with the item *number* to add it to your cart. 🛒\nType "change" to start over.';
       return respond(reply);

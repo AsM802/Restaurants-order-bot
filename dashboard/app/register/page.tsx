@@ -101,6 +101,17 @@ export default function RegisterPage() {
             />
           </div>
 
+          <div className="form-group">
+            <label className="form-label">Payment QR Code Image URL (Optional)</label>
+            <input
+              type="url"
+              className="form-input"
+              placeholder="https://..."
+              value={form.paymentQrCodeUrl || ''}
+              onChange={(e) => setForm({ ...form, paymentQrCodeUrl: e.target.value })}
+            />
+          </div>
+
           <div className="form-group" style={{ display: 'flex', gap: '10px' }}>
             <div style={{ flex: 1 }}>
               <label className="form-label">Latitude</label>
