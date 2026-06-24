@@ -20,6 +20,24 @@ const sendWAMessage = async (to: string, body: string) => {
   });
 };
 
+// Haversine formula to calculate distance in km
+function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // Radius of the earth in km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1); 
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2); 
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+  const d = R * c; // Distance in km
+  return d;
+}
+
+function deg2rad(deg: number) {
+  return deg * (Math.PI/180);
+}
+
 export async function POST(request: Request) {
   try {
     const textParams = await request.text();
@@ -27,6 +45,8 @@ export async function POST(request: Request) {
     
     const from = params.get('From');
     const incomingMsg = params.get('Body')?.trim().toLowerCase() || '';
+    const latitude = params.get('Latitude');
+    const longitude = params.get('Longitude');
 
     if (!from) {
       return new NextResponse('Missing From parameter', { status: 400 });
@@ -37,7 +57,7 @@ export async function POST(request: Request) {
     // Get or Create Session from DB
     let session = await WaSession.findOne({ phone: from });
     if (!session) {
-      session = new WaSession({ phone: from });
+      session = new WaSession({ phone: from, step: 'asking_location' });
     }
 
     const { MessagingResponse } = twilio.twiml;
@@ -51,9 +71,11 @@ export async function POST(request: Request) {
 
     // Global commands
     if (incomingMsg === 'change') {
-      session.step = 'browsing_restaurants';
+      session.step = 'asking_location';
       session.restaurantId = null;
       session.cart = [];
+      session.location = undefined;
+      return respond('📍 Please send your location (using WhatsApp attachment 📎) to find nearby restaurants.');
     } else if (incomingMsg === 'clear') {
       session.cart = [];
       return respond('🛒 Cart cleared. Text "menu" to see items.');
@@ -77,6 +99,8 @@ export async function POST(request: Request) {
       }
       const totalAmount = session.cart.reduce((sum: number, item: any) => sum + item.price, 0);
       
+      const restaurant = await Restaurant.findById(session.restaurantId);
+      
       const newOrder = await Order.create({
         restaurantId: session.restaurantId,
         platform: 'whatsapp',
@@ -90,34 +114,96 @@ export async function POST(request: Request) {
         })),
         totalPrice: totalAmount,
         status: 'pending',
+        payment: {
+          paymentMethod: 'ONLINE',
+          paymentStatus: 'Pending'
+        }
       });
 
       session.cart = [];
       session.step = 'browsing_menu';
-      return respond(`✅ *Order Placed Successfully!*\n\nOrder #${newOrder.orderNumber}\nTotal: ${process.env.RESTAURANT_CURRENCY_SYMBOL || '$'}${totalAmount}\n\nWe will start preparing your order soon!`);
+      
+      let paymentInstructions = '';
+      if (restaurant?.paymentNumber) {
+        paymentInstructions = `\n\n💳 *Payment Instructions:*\nPlease send ${process.env.RESTAURANT_CURRENCY_SYMBOL || '$'}${totalAmount} to WhatsApp Number: ${restaurant.paymentNumber}\n\nAfter paying, please reply with a screenshot of your successful transaction.`;
+      } else {
+        paymentInstructions = `\n\n💳 *Payment Instructions:*\nThe restaurant will contact you shortly for payment.`;
+      }
+
+      return respond(`✅ *Order Placed Successfully!*\n\nOrder #${newOrder.orderNumber}\nTotal: ${process.env.RESTAURANT_CURRENCY_SYMBOL || '$'}${totalAmount}${paymentInstructions}`);
     }
 
     // State Machine
-    if (session.step === 'browsing_restaurants') {
-      const restaurants = await Restaurant.find();
-      if (restaurants.length === 0) {
-        return respond('Sorry, there are no restaurants available right now.');
-      }
+    if (session.step === 'asking_location' || session.step === 'browsing_restaurants') { // Legacy support for 'browsing_restaurants' without location
+      if (latitude && longitude) {
+        session.location = { lat: parseFloat(latitude), lng: parseFloat(longitude) };
+        session.step = 'selecting_restaurant';
+        
+        const restaurants = await Restaurant.find();
+        let nearbyRestaurants = [];
+        
+        for (const r of restaurants) {
+          if (r.location && r.location.lat && r.location.lng) {
+            const distance = getDistanceFromLatLonInKm(session.location.lat, session.location.lng, r.location.lat, r.location.lng);
+            if (distance <= 3) {
+              nearbyRestaurants.push({ ...r.toObject(), distance });
+            }
+          } else {
+             // Include restaurants without location for now to ensure backwards compatibility
+             nearbyRestaurants.push({ ...r.toObject(), distance: 0 });
+          }
+        }
+        
+        if (nearbyRestaurants.length === 0) {
+          return respond('Sorry, there are no restaurants available within 3km of your location.');
+        }
+        
+        // Sort by distance
+        nearbyRestaurants.sort((a, b) => a.distance - b.distance);
 
-      // Check if user selected a restaurant by number
-      const selectedIndex = parseInt(incomingMsg) - 1;
-      if (!isNaN(selectedIndex) && selectedIndex >= 0 && selectedIndex < restaurants.length) {
-        session.restaurantId = restaurants[selectedIndex]._id;
-        session.step = 'browsing_menu';
-        session.cart = [];
-        return respond(`You selected *${restaurants[selectedIndex].name}*! 🍔\n\nText "menu" to view the menu, or "change" to select a different restaurant.`);
+        let reply = '👋 *Nearby Restaurants (within 3km):*\n\nPlease select a restaurant by replying with its number:\n\n';
+        nearbyRestaurants.forEach((r, idx) => {
+           let distStr = r.distance > 0 ? ` (${r.distance.toFixed(1)} km)` : '';
+           reply += `${idx + 1}. ${r.name}${distStr}\n`;
+        });
+        
+        // Save the nearby list order in session so they can select by number (simple implementation: we just re-fetch and re-sort when they send a number, but since it might change, it's a bit flaky. A better way is to rely on consistent DB sorting, but let's stick to simple re-fetch for now).
+        return respond(reply);
+      } else {
+         if (session.step === 'asking_location') {
+           return respond('👋 *Welcome to the Multi-Restaurant Bot!*\n\nTo find restaurants near you (within 3km), please send your location pin using the attachment 📎 button in WhatsApp.');
+         }
       }
+    }
 
-      let reply = '👋 *Welcome to the Multi-Restaurant Bot!*\n\nPlease select a restaurant by replying with its number:\n\n';
-      restaurants.forEach((r, idx) => {
-        reply += `${idx + 1}. ${r.name}\n`;
-      });
-      return respond(reply);
+    if (session.step === 'selecting_restaurant') {
+       if (latitude && longitude) return respond('Please select a restaurant from the list above by typing its number.');
+       
+       const restaurants = await Restaurant.find();
+       let nearbyRestaurants = [];
+       if (session.location) {
+         for (const r of restaurants) {
+           if (r.location && r.location.lat && r.location.lng) {
+             const distance = getDistanceFromLatLonInKm(session.location.lat, session.location.lng, r.location.lat, r.location.lng);
+             if (distance <= 3) nearbyRestaurants.push({ ...r.toObject(), distance });
+           } else {
+              nearbyRestaurants.push({ ...r.toObject(), distance: 0 });
+           }
+         }
+         nearbyRestaurants.sort((a, b) => a.distance - b.distance);
+       } else {
+          nearbyRestaurants = restaurants.map(r => ({...r.toObject(), distance: 0}));
+       }
+
+       const selectedIndex = parseInt(incomingMsg) - 1;
+       if (!isNaN(selectedIndex) && selectedIndex >= 0 && selectedIndex < nearbyRestaurants.length) {
+         session.restaurantId = nearbyRestaurants[selectedIndex]._id;
+         session.step = 'browsing_menu';
+         session.cart = [];
+         return respond(`You selected *${nearbyRestaurants[selectedIndex].name}*! 🍔\n\nText "menu" to view the menu, or "change" to search another location.`);
+       } else {
+         return respond('Please reply with a valid number from the list.');
+       }
     }
 
     if (session.step === 'browsing_menu') {
@@ -141,7 +227,7 @@ export async function POST(request: Request) {
       menuItems.forEach((item) => {
         reply += `${item.displayNumber}. ${item.name} - ${process.env.RESTAURANT_CURRENCY_SYMBOL || '$'}${item.price}\n`;
       });
-      reply += '\nReply with the item *number* to add it to your cart. 🛒\nType "change" to choose a different restaurant.';
+      reply += '\nReply with the item *number* to add it to your cart. 🛒\nType "change" to start over.';
       return respond(reply);
     }
 

@@ -138,7 +138,6 @@ export default function DashboardHome() {
           <ul style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 2, paddingLeft: 20 }}>
             <li>Set your <strong style={{ color: 'var(--text-primary)' }}>TELEGRAM_BOT_TOKEN</strong> in <code>backend/.env</code></li>
             <li>Point your Twilio WhatsApp sandbox webhook to <code>https://your-server.com/api/whatsapp/webhook</code></li>
-            <li>Set your <strong style={{ color: 'var(--text-primary)' }}>RAZORPAY_KEY_ID</strong> and <strong style={{ color: 'var(--text-primary)' }}>RAZORPAY_KEY_SECRET</strong></li>
             <li>Add your <strong style={{ color: 'var(--text-primary)' }}>MONGO_URI</strong> from MongoDB Atlas</li>
           </ul>
         </div>

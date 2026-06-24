@@ -1,14 +1,8 @@
 import { NextResponse } from 'next/server';
-import Razorpay from 'razorpay';
 import { v4 as uuidv4 } from 'uuid';
 import connectToDatabase from '@/lib/db';
 import Order from '@/models/Order';
 import { getUserIdFromRequest } from '@/lib/auth';
-
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID!,
-  key_secret: process.env.RAZORPAY_KEY_SECRET!,
-});
 
 // GET all orders for the logged-in owner
 export async function GET(request: Request) {
@@ -40,27 +34,18 @@ export async function POST(request: Request) {
     await connectToDatabase();
 
     const orderId = uuidv4().slice(0, 8).toUpperCase();
-    let razorpayOrderId = null;
-
-    if (paymentMethod === 'ONLINE') {
-      const options = {
-        amount: totalAmount * 100, // amount in the smallest currency unit
-        currency: process.env.RESTAURANT_CURRENCY || 'INR',
-        receipt: orderId,
-      };
-      const rpOrder = await razorpay.orders.create(options);
-      razorpayOrderId = rpOrder.id;
-    }
 
     const newOrder = new Order({
       orderId,
+      customerId: customerPhone || 'guest',
+      platform: 'whatsapp',
       customerName,
-      customerPhone,
       items,
-      totalAmount,
-      paymentMethod,
-      paymentStatus: paymentMethod === 'COD' ? 'Pending' : 'Pending', // Online starts pending
-      razorpayOrderId,
+      totalPrice: totalAmount,
+      payment: {
+        paymentMethod: paymentMethod || 'ONLINE',
+        paymentStatus: 'Pending',
+      },
       restaurantId,
     });
 

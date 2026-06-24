@@ -5,7 +5,7 @@ import Restaurant from '@/models/Restaurant';
 
 export async function POST(request: Request) {
   try {
-    const { name, email, password } = await request.json();
+    const { name, email, password, phone, paymentNumber, lat, lng } = await request.json();
     await connectToDatabase();
 
     let restaurant = await Restaurant.findOne({ email });
@@ -13,13 +13,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ msg: 'Restaurant owner already exists' }, { status: 400 });
     }
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
     restaurant = new Restaurant({
       name,
       email,
-      password: hashedPassword,
+      password, // The pre-save hook in the Restaurant model will hash this!
+      phone,
+      paymentNumber,
+      location: lat && lng ? { lat: parseFloat(lat), lng: parseFloat(lng) } : undefined
     });
 
     await restaurant.save();

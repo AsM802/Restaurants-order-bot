@@ -16,9 +16,8 @@ export interface IOrder extends Document {
   totalPrice: number;
   status: 'awaiting_payment' | 'pending' | 'preparing' | 'ready' | 'done';
   payment: {
-    razorpayOrderId: string | null;
-    razorpayPaymentId: string | null;
-    paid: boolean;
+    paymentMethod: 'COD' | 'ONLINE';
+    paymentStatus: 'Pending' | 'Paid' | 'Failed';
   };
   orderNumber: number;
 }
@@ -48,9 +47,8 @@ const orderSchema = new mongoose.Schema<IOrder>(
       default: 'awaiting_payment',
     },
     payment: {
-      razorpayOrderId: { type: String, default: null },
-      razorpayPaymentId: { type: String, default: null },
-      paid: { type: Boolean, default: false },
+      paymentMethod: { type: String, enum: ['COD', 'ONLINE'], required: true },
+      paymentStatus: { type: String, enum: ['Pending', 'Paid', 'Failed'], default: 'Pending' },
     },
     orderNumber: { type: Number }, // Human readable order number like #1001
   },

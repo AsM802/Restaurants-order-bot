@@ -8,6 +8,12 @@ export interface IRestaurant extends Document {
   phone: string;
   address: string;
   logoUrl: string;
+  paymentNumber?: string;
+  paymentQrCodeUrl?: string;
+  location?: {
+    lat: number;
+    lng: number;
+  };
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
@@ -19,6 +25,12 @@ const restaurantSchema = new mongoose.Schema<IRestaurant>(
     phone: { type: String, default: '' },
     address: { type: String, default: '' },
     logoUrl: { type: String, default: '' },
+    paymentNumber: { type: String, default: '' },
+    paymentQrCodeUrl: { type: String, default: '' },
+    location: {
+      lat: { type: Number },
+      lng: { type: Number }
+    }
   },
   { timestamps: true }
 );

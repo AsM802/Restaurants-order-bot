@@ -5,7 +5,7 @@ import api from '@/lib/api';
 import Link from 'next/link';
 
 export default function RegisterPage() {
-  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', address: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', address: '', paymentNumber: '', lat: '', lng: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -88,6 +88,42 @@ export default function RegisterPage() {
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
             />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Payment WhatsApp Number (Optional)</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="+91..."
+              value={form.paymentNumber}
+              onChange={(e) => setForm({ ...form, paymentNumber: e.target.value })}
+            />
+          </div>
+
+          <div className="form-group" style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ flex: 1 }}>
+              <label className="form-label">Latitude</label>
+              <input
+                type="number"
+                step="any"
+                className="form-input"
+                placeholder="e.g. 19.0760"
+                value={form.lat}
+                onChange={(e) => setForm({ ...form, lat: e.target.value })}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="form-label">Longitude</label>
+              <input
+                type="number"
+                step="any"
+                className="form-input"
+                placeholder="e.g. 72.8777"
+                value={form.lng}
+                onChange={(e) => setForm({ ...form, lng: e.target.value })}
+              />
+            </div>
           </div>
 
           <button
