@@ -117,13 +117,19 @@ export async function POST(request: Request) {
       session = new WaSession({ phone: from, step: 'asking_location' });
     }
 
-    // A helper function to send messages via Twilio and respond with 200 OK
+    // A helper function to send messages via Twilio TwiML directly
     const respond = async (msg: string, mediaUrl?: string) => {
       await session.save();
-      await sendWAMessage(from, msg, mediaUrl);
       
-      // We must return valid empty TwiML so Twilio knows we processed the webhook successfully
-      const twiml = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
+      const safeMsg = msg.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      
+      let twiml = '<?xml version="1.0" encoding="UTF-8"?>\n<Response>\n<Message>\n';
+      twiml += `<Body>${safeMsg}</Body>\n`;
+      if (mediaUrl) {
+         twiml += `<Media>${mediaUrl}</Media>\n`;
+      }
+      twiml += '</Message>\n</Response>';
+
       return new NextResponse(twiml, { 
         status: 200,
         headers: { 'Content-Type': 'text/xml' }
