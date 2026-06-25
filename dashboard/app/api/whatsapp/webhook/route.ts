@@ -13,35 +13,29 @@ const sendWAMessage = async (to: string, body: string, mediaUrl?: string) => {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   
   if (!accountSid || !authToken) {
-    console.log(`\n[MOCK TWILIO WA to ${to}]:\n${body}`);
-    if (mediaUrl) console.log(`[Media URL]: ${mediaUrl}`);
-    console.log(`\n`);
-    return { success: true };
+    throw new Error('MISSING_KEYS');
   }
 
   const twilioClient = twilio(accountSid, authToken);
   const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER || process.env.TWILIO_SMS_NUMBER;
+  if (!fromNumber) throw new Error('MISSING_FROM_NUMBER');
   
   // Ensure we format the to number for Twilio Whatsapp (whatsapp:+91...)
   const formattedTo = to.startsWith('whatsapp:') ? to : `whatsapp:+${to.replace(/^\+/, '')}`;
 
-  try {
-    const payload: any = {
-      body,
-      from: fromNumber,
-      to: formattedTo
-    };
-    
-    // If there's an image
-    if (mediaUrl) {
-      payload.mediaUrl = [mediaUrl];
-    }
-
-    await twilioClient.messages.create(payload);
-    return { success: true };
-  } catch (error) {
-    console.error('Error sending Twilio WA Message:', error);
+  const payload: any = {
+    body,
+    from: fromNumber,
+    to: formattedTo
+  };
+  
+  // If there's an image
+  if (mediaUrl) {
+    payload.mediaUrl = [mediaUrl];
   }
+
+  await twilioClient.messages.create(payload);
+  return { success: true };
 };
 
 // --- WEBHOOK VERIFICATION (GET) ---
@@ -121,7 +115,14 @@ export async function POST(request: Request) {
     const respond = async (msg: string, mediaUrl?: string) => {
       await session.save();
       
-      await sendWAMessage(from, msg, mediaUrl);
+      try {
+        await sendWAMessage(from, msg, mediaUrl);
+      } catch (err: any) {
+        // If Vercel fails to send via SDK, use TwiML to directly reply and show the error!
+        const safeErr = `⚠️ BOT ERROR: ${err.message}\nMsg: ${msg}`.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message><Body>${safeErr}</Body></Message></Response>`;
+        return new NextResponse(twiml, { status: 200, headers: { 'Content-Type': 'text/xml' } });
+      }
 
       return new NextResponse('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', { 
         status: 200,
