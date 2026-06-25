@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import api from '@/lib/api';
 
+import { useToast } from '@/components/ToastContext';
+
 const STATUSES = ['pending', 'preparing', 'ready', 'done'];
 const STATUS_NEXT: Record<string, string> = {
   pending: 'preparing',
@@ -23,6 +25,7 @@ export default function OrdersPage() {
   const [filter, setFilter] = useState('all');
   const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set());
   const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || '₹';
+  const { addToast } = useToast();
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -49,8 +52,10 @@ export default function OrdersPage() {
     if (nextStatus === currentStatus) return;
     try {
       await api.put(`/orders/${orderId}/status`, { status: nextStatus });
+      addToast(`Order marked as ${nextStatus}`, 'success');
+      fetchOrders();
     } catch {
-      alert('Failed to update status');
+      addToast('Failed to update status', 'error');
     }
   };
 

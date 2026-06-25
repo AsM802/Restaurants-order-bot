@@ -16,6 +16,7 @@ interface MenuItem {
 
 const EMPTY_ITEM = { name: '', description: '', price: '', category: 'Main Course', imageUrl: '', available: true };
 const CATEGORIES = ['Starters', 'Main Course', 'Breads', 'Rice & Biryani', 'Desserts', 'Beverages', 'Snacks', 'Combos'];
+import { useToast } from '@/components/ToastContext';
 
 export default function MenuPage() {
   const [items, setItems] = useState<MenuItem[]>([]);
@@ -25,6 +26,7 @@ export default function MenuPage() {
   const [form, setForm] = useState<any>(EMPTY_ITEM);
   const [saving, setSaving] = useState(false);
   const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || '₹';
+  const { addToast } = useToast();
 
   const fetchMenu = async () => {
     try {
@@ -32,6 +34,7 @@ export default function MenuPage() {
       setItems(data);
     } catch (err) {
       console.error('Failed to fetch menu');
+      addToast('Failed to fetch menu', 'error');
     } finally {
       setLoading(false);
     }
@@ -49,13 +52,15 @@ export default function MenuPage() {
       const payload = { ...form, price: parseFloat(form.price) };
       if (editItem) {
         await api.put(`/menu/${editItem._id}`, payload);
+        addToast('Item updated successfully', 'success');
       } else {
         await api.post('/menu', payload);
+        addToast('Item added successfully', 'success');
       }
       setShowModal(false);
       fetchMenu();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Save failed');
+      addToast(err.response?.data?.message || 'Save failed', 'error');
     } finally {
       setSaving(false);
     }
@@ -65,18 +70,20 @@ export default function MenuPage() {
     if (!confirm(`Delete "${name}"? This will renumber the menu.`)) return;
     try {
       await api.delete(`/menu/${id}`);
+      addToast('Item deleted', 'success');
       fetchMenu();
     } catch {
-      alert('Delete failed');
+      addToast('Delete failed', 'error');
     }
   };
 
   const handleToggleAvailable = async (item: MenuItem) => {
     try {
       await api.put(`/menu/${item._id}`, { available: !item.available });
+      addToast(`Item ${!item.available ? 'shown' : 'hidden'}`, 'success');
       fetchMenu();
     } catch {
-      alert('Update failed');
+      addToast('Update failed', 'error');
     }
   };
 

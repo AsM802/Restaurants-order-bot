@@ -53,30 +53,41 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="login-page">
-      <div className="login-card fade-in">
+    <div className="login-page" style={{ position: 'relative', overflow: 'hidden' }}>
+      {/* Decorative Orbs */}
+      <div style={{ position: 'absolute', top: '-10%', left: '-10%', width: '40vw', height: '40vw', background: 'radial-gradient(circle, rgba(249,115,22,0.15) 0%, transparent 70%)', filter: 'blur(60px)', zIndex: 0 }} />
+      <div style={{ position: 'absolute', bottom: '-10%', right: '-10%', width: '40vw', height: '40vw', background: 'radial-gradient(circle, rgba(59,130,246,0.15) 0%, transparent 70%)', filter: 'blur(60px)', zIndex: 0 }} />
+      
+      <div className="login-card fade-in" style={{ zIndex: 10, border: '1px solid rgba(249,115,22,0.3)', boxShadow: '0 32px 80px rgba(0,0,0,0.8), 0 0 40px rgba(249,115,22,0.1)' }}>
         <div className="login-header">
-          <div className="logo">🍴</div>
-          <h1>Welcome back</h1>
-          <p>Sign in to your restaurant dashboard</p>
+          <div className="logo" style={{ animation: 'none', filter: 'drop-shadow(0 0 20px var(--accent))' }}>🔥</div>
+          <h1 style={{ background: 'linear-gradient(135deg, #fff, var(--accent))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            Restaurant OS
+          </h1>
+          <p style={{ letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: '12px', marginTop: '12px', fontWeight: 800 }}>Welcome Back, Owner</p>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '32px' }}>
           <GoogleLogin
             onSuccess={handleGoogleSuccess}
             onError={() => setError('Google Login Failed')}
             useOneTap
+            shape="pill"
+            theme="filled_black"
           />
         </div>
 
-        <div style={{ textAlign: 'center', marginBottom: '24px', color: 'var(--text-muted)' }}>
-          - OR -
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '32px', color: 'var(--border)' }}>
+          <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+          <span style={{ padding: '0 16px', fontSize: '12px', fontWeight: 600, letterSpacing: '0.1em' }}>OR CONTINUE WITH EMAIL</span>
+          <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>
-          {error && <div className="login-error">⚠️ {error}</div>}
-          <div className="form-group">
-            <label className="form-label">Email</label>
+          {error && <div className="login-error" style={{ animation: 'slideUp 0.3s' }}>⚠️ {error}</div>}
+          
+          <div className="form-group" style={{ marginBottom: '16px' }}>
+            <label className="form-label" style={{ color: '#fff' }}>Email Address</label>
             <input
               id="login-email"
               type="email"
@@ -85,19 +96,21 @@ export default function LoginPage() {
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               required
+              style={{ background: 'rgba(0,0,0,0.5)', borderColor: 'rgba(255,255,255,0.2)', color: '#fff' }}
             />
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Password</label>
+          <div className="form-group" style={{ marginBottom: '32px' }}>
+            <label className="form-label" style={{ color: '#fff' }}>Password</label>
             <input
               id="login-password"
               type="password"
               className="form-input"
-              placeholder="••••••••"
+              placeholder="••••••••••••"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               required
+              style={{ background: 'rgba(0,0,0,0.5)', borderColor: 'rgba(255,255,255,0.2)', color: '#fff', letterSpacing: '0.2em' }}
             />
           </div>
 
@@ -106,14 +119,20 @@ export default function LoginPage() {
             type="submit"
             className="btn btn-primary"
             disabled={loading}
+            style={{ width: '100%', padding: '16px', fontSize: '16px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em' }}
           >
-            {loading ? '⏳ Signing in...' : '🚀 Sign In'}
+            {loading ? '⏳ Authenticating...' : 'Secure Login 🚀'}
           </button>
         </form>
 
-        <p className="text-muted text-sm" style={{ textAlign: 'center', marginTop: '24px' }}>
-          First time? <Link href="/register" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Create an account here</Link>.
-        </p>
+        <div style={{ textAlign: 'center', marginTop: '32px', paddingTop: '24px', borderTop: '1px solid var(--border)' }}>
+          <p className="text-muted text-sm">
+            Don&apos;t have an account?{' '}
+            <Link href="/register" style={{ color: 'var(--accent)', fontWeight: 800, textDecoration: 'none' }}>
+              Create your restaurant
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

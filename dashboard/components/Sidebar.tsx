@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { href: '/menu', icon: '🍽️', label: 'Menu Manager' },
   { href: '/orders', icon: '📋', label: 'Orders' },
   { href: '/cook', icon: '👨‍🍳', label: 'Cook Screen' },
+  { href: '/settings', icon: '⚙️', label: 'Settings' },
 ];
 
 export default function Sidebar() {

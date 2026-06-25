@@ -36,6 +36,28 @@ export default function RegisterPage() {
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const data = new FormData();
+    data.append('file', file);
+    // basic loading indication
+    setLoading(true);
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: data });
+      const json = await res.json();
+      if (res.ok) {
+        setForm(prev => ({ ...prev, paymentQrCodeUrl: json.url }));
+      } else {
+        setError(json.msg || 'Upload failed');
+      }
+    } catch (err) {
+      setError('Error uploading file');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -127,6 +149,7 @@ export default function RegisterPage() {
 
           <div className="form-group">
             <label className="form-label">Payment WhatsApp Number (Optional)</label>
+            <p className="text-muted text-sm" style={{ marginTop: '-8px', marginBottom: '8px' }}>Currently, payments are processed manually via WhatsApp.</p>
             <input
               type="text"
               className="form-input"
@@ -137,14 +160,19 @@ export default function RegisterPage() {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Payment QR Code Image URL (Optional)</label>
+            <label className="form-label">Payment QR Code Image</label>
             <input
-              type="url"
+              type="file"
+              accept="image/*"
               className="form-input"
-              placeholder="https://..."
-              value={form.paymentQrCodeUrl || ''}
-              onChange={(e) => setForm({ ...form, paymentQrCodeUrl: e.target.value })}
+              style={{ padding: '12px' }}
+              onChange={handleFileUpload}
             />
+            {form.paymentQrCodeUrl && (
+              <div style={{ marginTop: '16px' }}>
+                <img src={form.paymentQrCodeUrl} alt="QR Code" style={{ maxWidth: '200px', borderRadius: '12px', border: '1px solid var(--border)' }} />
+              </div>
+            )}
           </div>
 
           <div className="form-group" style={{ display: 'flex', gap: '10px' }}>
