@@ -5,6 +5,7 @@ import api from '@/lib/api';
 
 export default function LoginPage() {
   const [step, setStep] = useState(1);
+  const [countryCode, setCountryCode] = useState('+91');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
@@ -21,8 +22,16 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await api.post('/auth/send-otp', { phone });
+      const fullPhone = `${countryCode}${phone.replace(/^0+/, '')}`; // remove leading zeros from phone if any
+      const { data } = await api.post('/auth/send-otp', { phone: fullPhone });
       setStep(2);
+      
+      // For testing purposes: if Twilio fails (e.g. sandbox not joined), backend returns devOtp
+      if (data.devOtp) {
+        alert(`FOR TESTING: Your OTP is ${data.devOtp}`);
+        // Optionally auto-fill it for them to make testing even easier
+        setOtp(data.devOtp);
+      }
     } catch (err: any) {
       setError(err.response?.data?.msg || 'Failed to send OTP.');
     } finally {
@@ -36,7 +45,8 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const { data } = await api.post('/auth/verify-otp', { phone, otp });
+      const fullPhone = `${countryCode}${phone.replace(/^0+/, '')}`;
+      const { data } = await api.post('/auth/verify-otp', { phone: fullPhone, otp });
       localStorage.setItem('token', data.token);
       localStorage.setItem('restaurant', JSON.stringify({ phone: data.restaurant.phone, name: data.restaurant.name }));
       router.push('/');
@@ -68,16 +78,32 @@ export default function LoginPage() {
             
             <div className="form-group" style={{ marginBottom: '32px' }}>
               <label className="form-label" style={{ color: '#fff' }}>Mobile Number</label>
-              <input
-                id="login-phone"
-                type="tel"
-                className="form-input"
-                placeholder="+1234567890"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                required
-                style={{ background: 'rgba(0,0,0,0.5)', borderColor: 'rgba(255,255,255,0.2)', color: '#fff' }}
-              />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <select 
+                  value={countryCode}
+                  onChange={(e) => setCountryCode(e.target.value)}
+                  className="form-input"
+                  style={{ width: '100px', background: 'rgba(0,0,0,0.5)', borderColor: 'rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer' }}
+                >
+                  <option value="+1">+1 (US/CA)</option>
+                  <option value="+44">+44 (UK)</option>
+                  <option value="+91">+91 (IN)</option>
+                  <option value="+61">+61 (AU)</option>
+                  <option value="+971">+971 (AE)</option>
+                  <option value="+254">+254 (KE)</option>
+                  {/* Add more as needed */}
+                </select>
+                <input
+                  id="login-phone"
+                  type="tel"
+                  className="form-input"
+                  placeholder="1234567890"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                  required
+                  style={{ flex: 1, background: 'rgba(0,0,0,0.5)', borderColor: 'rgba(255,255,255,0.2)', color: '#fff' }}
+                />
+              </div>
             </div>
 
             <button
