@@ -39,13 +39,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // ALWAYS return the OTP to the frontend for this demo so you can test without Twilio Sandbox limits
-    console.log(`[DEV FALLBACK] OTP for ${phone} is ${otpCode}`);
-
-    return NextResponse.json({ 
-      msg: 'OTP sent successfully',
-      devOtp: otpCode 
-    });
+    return NextResponse.json({ msg: 'OTP sent successfully' });
   } catch (err: any) {
     console.error(err.message);
     return NextResponse.json({ msg: 'Server error' }, { status: 500 });

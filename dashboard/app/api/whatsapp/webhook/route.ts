@@ -5,51 +5,42 @@ import Restaurant from '@/models/Restaurant';
 import MenuItem from '@/models/MenuItem';
 import Order from '@/models/Order';
 
-// --- META CLOUD API HELPERS ---
+// --- TWILIO HELPERS ---
+import twilio from 'twilio';
 
 const sendWAMessage = async (to: string, body: string, mediaUrl?: string) => {
-  const token = process.env.META_WHATSAPP_TOKEN;
-  const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
   
-  if (!token || token === 'your_meta_token' || !phoneNumberId) {
-    console.log(`\n[MOCK META WA to ${to}]:\n${body}`);
+  if (!accountSid || !authToken) {
+    console.log(`\n[MOCK TWILIO WA to ${to}]:\n${body}`);
     if (mediaUrl) console.log(`[Media URL]: ${mediaUrl}`);
     console.log(`\n`);
     return { success: true };
   }
 
-  let payload: any = {
-    messaging_product: 'whatsapp',
-    to,
-    type: 'text',
-    text: { body }
-  };
-
-  // If there's an image, we send an image with a caption instead of just text
-  if (mediaUrl) {
-    payload = {
-      messaging_product: 'whatsapp',
-      to,
-      type: 'image',
-      image: {
-        link: mediaUrl,
-        caption: body
-      }
-    };
-  }
+  const twilioClient = twilio(accountSid, authToken);
+  const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER || process.env.TWILIO_SMS_NUMBER;
+  
+  // Ensure we format the to number for Twilio Whatsapp (whatsapp:+91...)
+  const formattedTo = to.startsWith('whatsapp:') ? to : `whatsapp:+${to.replace(/^\+/, '')}`;
 
   try {
-    const res = await fetch(`https://graph.facebook.com/v17.0/${phoneNumberId}/messages`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-    return await res.json();
+    const payload: any = {
+      body,
+      from: fromNumber,
+      to: formattedTo
+    };
+    
+    // If there's an image
+    if (mediaUrl) {
+      payload.mediaUrl = [mediaUrl];
+    }
+
+    await twilioClient.messages.create(payload);
+    return { success: true };
   } catch (error) {
-    console.error('Error sending Meta WA Message:', error);
+    console.error('Error sending Twilio WA Message:', error);
   }
 };
 
@@ -92,38 +83,30 @@ function deg2rad(deg: number) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const textData = await request.text();
+    const params = new URLSearchParams(textData);
 
-    // Check if this is a valid WhatsApp Webhook payload
-    if (body.object !== 'whatsapp_business_account') {
-      return new NextResponse('Not a WhatsApp Webhook', { status: 404 });
+    const fromTwilio = params.get('From'); // e.g. "whatsapp:+919999999999"
+    const bodyStr = params.get('Body') || '';
+    const numMedia = parseInt(params.get('NumMedia') || '0', 10);
+    const latitudeStr = params.get('Latitude');
+    const longitudeStr = params.get('Longitude');
+
+    if (!fromTwilio) {
+      return new NextResponse('Not a Twilio Webhook', { status: 400 });
     }
 
-    const entry = body.entry?.[0];
-    const changes = entry?.changes?.[0];
-    const value = changes?.value;
-    const message = value?.messages?.[0];
+    // Extract raw phone number to be consistent with DB (strip 'whatsapp:' and '+')
+    const from = fromTwilio.replace('whatsapp:', '').replace('+', ''); 
 
-    // If no message is found, this might be a status update (delivered/read), we just acknowledge it
-    if (!message) {
-      return new NextResponse('EVENT_RECEIVED', { status: 200 });
-    }
+    let incomingMsg = bodyStr.trim().toLowerCase();
+    let latitude: number | null = latitudeStr ? parseFloat(latitudeStr) : null;
+    let longitude: number | null = longitudeStr ? parseFloat(longitudeStr) : null;
+    let hasMedia = numMedia > 0;
 
-    const from = message.from; // Sender's phone number
-    let incomingMsg = '';
-    let latitude: number | null = null;
-    let longitude: number | null = null;
-    let hasMedia = false;
-
-    // Parse the message type
-    if (message.type === 'text') {
-      incomingMsg = message.text.body.trim().toLowerCase();
-    } else if (message.type === 'location') {
-      latitude = message.location.latitude;
-      longitude = message.location.longitude;
-    } else if (message.type === 'image' || message.type === 'document') {
-      hasMedia = true; // For payment screenshots
-      incomingMsg = 'image';
+    // Twilio sends media but the Body might be empty. If there is media and no body, set it to 'image' to simulate it
+    if (hasMedia && !incomingMsg) {
+       incomingMsg = 'image';
     }
 
     await connectToDatabase();

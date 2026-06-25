@@ -23,15 +23,8 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const fullPhone = `${countryCode}${phone.replace(/^0+/, '')}`; // remove leading zeros from phone if any
-      const { data } = await api.post('/auth/send-otp', { phone: fullPhone });
+      await api.post('/auth/send-otp', { phone: fullPhone });
       setStep(2);
-      
-      // For testing purposes: if Twilio fails (e.g. sandbox not joined), backend returns devOtp
-      if (data.devOtp) {
-        alert(`FOR TESTING: Your OTP is ${data.devOtp}`);
-        // Optionally auto-fill it for them to make testing even easier
-        setOtp(data.devOtp);
-      }
     } catch (err: any) {
       setError(err.response?.data?.msg || 'Failed to send OTP.');
     } finally {
