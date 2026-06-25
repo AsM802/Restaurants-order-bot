@@ -146,8 +146,18 @@ export async function POST(request: Request) {
         cartStr += `${index + 1}. ${item.name} - ${process.env.RESTAURANT_CURRENCY_SYMBOL || '₹'}${item.price}\n`;
         total += item.price;
       });
-      cartStr += `\n*Total:* ${process.env.RESTAURANT_CURRENCY_SYMBOL || '₹'}${total}\n\nText "order" to place the order, or "clear" to empty cart.`;
+      cartStr += `\n*Total:* ${process.env.RESTAURANT_CURRENCY_SYMBOL || '₹'}${total}\n\nText "remove [number]" to remove an item, "order" to place the order, or "clear" to empty cart.`;
       return respond(cartStr);
+    } else if (incomingMsg.startsWith('remove ')) {
+      const indexStr = incomingMsg.split(' ')[1];
+      const index = parseInt(indexStr) - 1;
+      
+      if (!isNaN(index) && session.cart && index >= 0 && index < session.cart.length) {
+        const removedItem = session.cart.splice(index, 1)[0];
+        return respond(`🗑️ Removed *${removedItem.name}* from your cart.\n\nText "cart" to see your updated cart, or "menu" to add more.`);
+      } else {
+        return respond('⚠️ Invalid item number. Text "cart" to see your cart and reply with "remove [number]".');
+      }
     } else if (incomingMsg === 'menu' && session.restaurantId) {
       session.step = 'browsing_menu';
     } else if (incomingMsg === 'order' && session.restaurantId) {
