@@ -208,8 +208,8 @@ export async function POST(request: Request) {
            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://restaurants-order-bot.vercel.app';
            qrUrl = `${baseUrl}${qrUrl}`;
         }
-        paymentInstructions += `\n\n💳 Please scan the QR code to pay ${process.env.RESTAURANT_CURRENCY_SYMBOL || '₹'}${totalAmount}. After paying, reply with a *screenshot* of your successful transaction.`;
-        return respond(paymentInstructions, qrUrl);
+        paymentInstructions += `\n\n💳 Please pay ${process.env.RESTAURANT_CURRENCY_SYMBOL || '₹'}${totalAmount} using this QR Code link:\n${qrUrl}\n\nAfter paying, reply with a *screenshot* of your successful transaction.`;
+        return respond(paymentInstructions);
       } else if (restaurant?.paymentNumber) {
         paymentInstructions += `\n\n💳 Please send ${process.env.RESTAURANT_CURRENCY_SYMBOL || '₹'}${totalAmount} to WhatsApp Number: ${restaurant.paymentNumber}\n\nAfter paying, reply with a *screenshot* of your successful transaction.`;
         return respond(paymentInstructions);
