@@ -22,8 +22,6 @@ export async function POST(request: Request) {
     await Otp.deleteMany({ phone });
     await Otp.create({ phone, otp: otpCode });
 
-    let devOtpFallback = null;
-
     // Try sending SMS/WhatsApp via Twilio
     if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
       const fromNumber = process.env.TWILIO_SMS_NUMBER || process.env.TWILIO_WHATSAPP_NUMBER;
@@ -38,18 +36,15 @@ export async function POST(request: Request) {
         console.log(`OTP sent to ${toNumber} via Twilio`);
       } catch (twilioErr: any) {
         console.error('Twilio Error:', twilioErr.message);
-        // Fallback for development/testing if Twilio fails (e.g. sandbox not joined)
-        console.log(`[DEV FALLBACK] OTP for ${phone} is ${otpCode}`);
-        devOtpFallback = otpCode;
       }
-    } else {
-      console.log(`[DEV MODE] OTP for ${phone} is ${otpCode}`);
-      devOtpFallback = otpCode;
     }
+
+    // ALWAYS return the OTP to the frontend for this demo so you can test without Twilio Sandbox limits
+    console.log(`[DEV FALLBACK] OTP for ${phone} is ${otpCode}`);
 
     return NextResponse.json({ 
       msg: 'OTP sent successfully',
-      devOtp: devOtpFallback 
+      devOtp: otpCode 
     });
   } catch (err: any) {
     console.error(err.message);
