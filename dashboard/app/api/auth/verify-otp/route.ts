@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     };
 
     const token = jwt.sign(payload, process.env.JWT_SECRET || 'secret', {
-      expiresIn: '5h',
+      expiresIn: '30d',
     });
 
     return NextResponse.json({ token, restaurant });
