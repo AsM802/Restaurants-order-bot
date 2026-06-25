@@ -117,11 +117,13 @@ export async function POST(request: Request) {
       session = new WaSession({ phone: from, step: 'asking_location' });
     }
 
-    // A helper function to send messages via Meta and respond with 200 OK
+    // A helper function to send messages via Twilio and respond with 200 OK
     const respond = async (msg: string, mediaUrl?: string) => {
       await session.save();
       await sendWAMessage(from, msg, mediaUrl);
-      return new NextResponse('EVENT_RECEIVED', { status: 200 });
+      
+      // We must return an empty 200 OK, otherwise Twilio will send the response text back to the user
+      return new NextResponse(null, { status: 200 });
     };
 
     // --- GLOBAL COMMANDS ---
