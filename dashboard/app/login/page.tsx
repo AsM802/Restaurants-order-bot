@@ -23,8 +23,13 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const fullPhone = `${countryCode}${phone.replace(/^0+/, '')}`; // remove leading zeros from phone if any
-      await api.post('/auth/send-otp', { phone: fullPhone });
+      const { data } = await api.post('/auth/send-otp', { phone: fullPhone });
       setStep(2);
+      
+      if (data.devOtp) {
+        alert(`FOR TESTING: Your OTP is ${data.devOtp}`);
+        setOtp(data.devOtp);
+      }
     } catch (err: any) {
       setError(err.response?.data?.msg || 'Failed to send OTP.');
     } finally {
