@@ -2,11 +2,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
-import Link from 'next/link';
-import { GoogleLogin } from '@react-oauth/google';
 
 export default function LoginPage() {
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [step, setStep] = useState(1);
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -15,38 +15,33 @@ export default function LoginPage() {
     if (localStorage.getItem('token')) router.push('/');
   }, [router]);
 
-  const handleGoogleSuccess = async (credentialResponse: any) => {
-    try {
-      const res = await fetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential: credentialResponse.credential }),
-      });
-      const data = await res.json();
-
-      if (res.ok) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('restaurant', JSON.stringify({ name: data.name || 'Google User', email: data.email || '' }));
-        router.push('/');
-      } else {
-        setError(data.msg || 'Google Login failed');
-      }
-    } catch (err) {
-      setError('Error connecting to server');
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!phone) return setError('Please enter your mobile number');
     setError('');
     setLoading(true);
     try {
-      const { data } = await api.post('/auth/login', form);
+      await api.post('/auth/send-otp', { phone });
+      setStep(2);
+    } catch (err: any) {
+      setError(err.response?.data?.msg || 'Failed to send OTP.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otp) return setError('Please enter the OTP');
+    setError('');
+    setLoading(true);
+    try {
+      const { data } = await api.post('/auth/verify-otp', { phone, otp });
       localStorage.setItem('token', data.token);
-      localStorage.setItem('restaurant', JSON.stringify({ name: data.name, email: data.email }));
+      localStorage.setItem('restaurant', JSON.stringify({ phone: data.restaurant.phone, name: data.restaurant.name }));
       router.push('/');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed. Check your credentials.');
+      setError(err.response?.data?.msg || 'Invalid OTP.');
     } finally {
       setLoading(false);
     }
@@ -67,72 +62,72 @@ export default function LoginPage() {
           <p style={{ letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: '12px', marginTop: '12px', fontWeight: 800 }}>Welcome Back, Owner</p>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '32px' }}>
-          <GoogleLogin
-            onSuccess={handleGoogleSuccess}
-            onError={() => setError('Google Login Failed')}
-            useOneTap
-            shape="pill"
-            theme="filled_black"
-          />
-        </div>
+        {step === 1 ? (
+          <form className="login-form" onSubmit={handleSendOtp}>
+            {error && <div className="login-error" style={{ animation: 'slideUp 0.3s' }}>⚠️ {error}</div>}
+            
+            <div className="form-group" style={{ marginBottom: '32px' }}>
+              <label className="form-label" style={{ color: '#fff' }}>Mobile Number</label>
+              <input
+                id="login-phone"
+                type="tel"
+                className="form-input"
+                placeholder="+1234567890"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                required
+                style={{ background: 'rgba(0,0,0,0.5)', borderColor: 'rgba(255,255,255,0.2)', color: '#fff' }}
+              />
+            </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '32px', color: 'var(--border)' }}>
-          <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
-          <span style={{ padding: '0 16px', fontSize: '12px', fontWeight: 600, letterSpacing: '0.1em' }}>OR CONTINUE WITH EMAIL</span>
-          <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
-        </div>
+            <button
+              id="login-submit"
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading}
+              style={{ width: '100%', padding: '16px', fontSize: '16px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em' }}
+            >
+              {loading ? '⏳ Sending OTP...' : 'Send OTP 🚀'}
+            </button>
+          </form>
+        ) : (
+          <form className="login-form" onSubmit={handleVerifyOtp}>
+            {error && <div className="login-error" style={{ animation: 'slideUp 0.3s' }}>⚠️ {error}</div>}
+            
+            <div className="form-group" style={{ marginBottom: '32px' }}>
+              <label className="form-label" style={{ color: '#fff' }}>Enter OTP</label>
+              <input
+                id="login-otp"
+                type="text"
+                className="form-input"
+                placeholder="123456"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                required
+                style={{ background: 'rgba(0,0,0,0.5)', borderColor: 'rgba(255,255,255,0.2)', color: '#fff', letterSpacing: '0.5em', textAlign: 'center' }}
+              />
+            </div>
 
-        <form className="login-form" onSubmit={handleSubmit}>
-          {error && <div className="login-error" style={{ animation: 'slideUp 0.3s' }}>⚠️ {error}</div>}
-          
-          <div className="form-group" style={{ marginBottom: '16px' }}>
-            <label className="form-label" style={{ color: '#fff' }}>Email Address</label>
-            <input
-              id="login-email"
-              type="email"
-              className="form-input"
-              placeholder="owner@restaurant.com"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              required
-              style={{ background: 'rgba(0,0,0,0.5)', borderColor: 'rgba(255,255,255,0.2)', color: '#fff' }}
-            />
-          </div>
-
-          <div className="form-group" style={{ marginBottom: '32px' }}>
-            <label className="form-label" style={{ color: '#fff' }}>Password</label>
-            <input
-              id="login-password"
-              type="password"
-              className="form-input"
-              placeholder="••••••••••••"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              required
-              style={{ background: 'rgba(0,0,0,0.5)', borderColor: 'rgba(255,255,255,0.2)', color: '#fff', letterSpacing: '0.2em' }}
-            />
-          </div>
-
-          <button
-            id="login-submit"
-            type="submit"
-            className="btn btn-primary"
-            disabled={loading}
-            style={{ width: '100%', padding: '16px', fontSize: '16px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em' }}
-          >
-            {loading ? '⏳ Authenticating...' : 'Secure Login 🚀'}
-          </button>
-        </form>
-
-        <div style={{ textAlign: 'center', marginTop: '32px', paddingTop: '24px', borderTop: '1px solid var(--border)' }}>
-          <p className="text-muted text-sm">
-            Don&apos;t have an account?{' '}
-            <Link href="/register" style={{ color: 'var(--accent)', fontWeight: 800, textDecoration: 'none' }}>
-              Create your restaurant
-            </Link>
-          </p>
-        </div>
+            <button
+              id="login-submit"
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading}
+              style={{ width: '100%', padding: '16px', fontSize: '16px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em' }}
+            >
+              {loading ? '⏳ Verifying...' : 'Secure Login 🚀'}
+            </button>
+            <div style={{ textAlign: 'center', marginTop: '16px' }}>
+              <button
+                type="button"
+                onClick={() => { setStep(1); setOtp(''); setError(''); }}
+                style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                Use a different number
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

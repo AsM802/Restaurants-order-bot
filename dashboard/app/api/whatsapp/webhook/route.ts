@@ -1,28 +1,79 @@
 import { NextResponse } from 'next/server';
-import twilio from 'twilio';
 import connectToDatabase from '@/lib/db';
 import WaSession from '@/models/WaSession';
 import Restaurant from '@/models/Restaurant';
 import MenuItem from '@/models/MenuItem';
 import Order from '@/models/Order';
-import { v4 as uuidv4 } from 'uuid';
 
-const sendWAMessage = async (to: string, body: string) => {
-  if (!process.env.TWILIO_ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID === 'your_twilio_sid') {
-    console.log(`[MOCK WHATSAPP to ${to}]:\n${body}\n`);
-    return { sid: 'mock_sid' };
+// --- META CLOUD API HELPERS ---
+
+const sendWAMessage = async (to: string, body: string, mediaUrl?: string) => {
+  const token = process.env.META_WHATSAPP_TOKEN;
+  const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
+  
+  if (!token || token === 'your_meta_token' || !phoneNumberId) {
+    console.log(`\n[MOCK META WA to ${to}]:\n${body}`);
+    if (mediaUrl) console.log(`[Media URL]: ${mediaUrl}`);
+    console.log(`\n`);
+    return { success: true };
   }
-  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  return client.messages.create({
-    from: process.env.TWILIO_WHATSAPP_NUMBER,
+
+  let payload: any = {
+    messaging_product: 'whatsapp',
     to,
-    body,
-  });
+    type: 'text',
+    text: { body }
+  };
+
+  // If there's an image, we send an image with a caption instead of just text
+  if (mediaUrl) {
+    payload = {
+      messaging_product: 'whatsapp',
+      to,
+      type: 'image',
+      image: {
+        link: mediaUrl,
+        caption: body
+      }
+    };
+  }
+
+  try {
+    const res = await fetch(`https://graph.facebook.com/v17.0/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    return await res.json();
+  } catch (error) {
+    console.error('Error sending Meta WA Message:', error);
+  }
 };
 
-// Haversine formula to calculate distance in km
+// --- WEBHOOK VERIFICATION (GET) ---
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const mode = searchParams.get('hub.mode');
+  const token = searchParams.get('hub.verify_token');
+  const challenge = searchParams.get('hub.challenge');
+
+  // Verify the token matches the one in .env
+  if (mode === 'subscribe' && token === process.env.META_VERIFY_TOKEN) {
+    console.log('WEBHOOK VERIFIED');
+    return new NextResponse(challenge, { status: 200 });
+  } else {
+    return new NextResponse('Forbidden', { status: 403 });
+  }
+}
+
+// --- UTILS ---
+
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371; // Radius of the earth in km
+  const R = 6371;
   const dLat = deg2rad(lat2 - lat1);
   const dLon = deg2rad(lon2 - lon1); 
   const a = 
@@ -30,26 +81,49 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
     Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
     Math.sin(dLon/2) * Math.sin(dLon/2); 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-  const d = R * c; // Distance in km
-  return d;
+  return R * c;
 }
 
 function deg2rad(deg: number) {
   return deg * (Math.PI/180);
 }
 
+// --- WEBHOOK HANDLER (POST) ---
+
 export async function POST(request: Request) {
   try {
-    const textParams = await request.text();
-    const params = new URLSearchParams(textParams);
-    
-    const from = params.get('From');
-    const incomingMsg = params.get('Body')?.trim().toLowerCase() || '';
-    const latitude = params.get('Latitude');
-    const longitude = params.get('Longitude');
+    const body = await request.json();
 
-    if (!from) {
-      return new NextResponse('Missing From parameter', { status: 400 });
+    // Check if this is a valid WhatsApp Webhook payload
+    if (body.object !== 'whatsapp_business_account') {
+      return new NextResponse('Not a WhatsApp Webhook', { status: 404 });
+    }
+
+    const entry = body.entry?.[0];
+    const changes = entry?.changes?.[0];
+    const value = changes?.value;
+    const message = value?.messages?.[0];
+
+    // If no message is found, this might be a status update (delivered/read), we just acknowledge it
+    if (!message) {
+      return new NextResponse('EVENT_RECEIVED', { status: 200 });
+    }
+
+    const from = message.from; // Sender's phone number
+    let incomingMsg = '';
+    let latitude: number | null = null;
+    let longitude: number | null = null;
+    let hasMedia = false;
+
+    // Parse the message type
+    if (message.type === 'text') {
+      incomingMsg = message.text.body.trim().toLowerCase();
+    } else if (message.type === 'location') {
+      latitude = message.location.latitude;
+      longitude = message.location.longitude;
+    } else if (message.type === 'image' || message.type === 'document') {
+      hasMedia = true; // For payment screenshots
+      incomingMsg = 'image';
     }
 
     await connectToDatabase();
@@ -60,17 +134,14 @@ export async function POST(request: Request) {
       session = new WaSession({ phone: from, step: 'asking_location' });
     }
 
-    const { MessagingResponse } = twilio.twiml;
-    const twiml = new MessagingResponse();
-
+    // A helper function to send messages via Meta and respond with 200 OK
     const respond = async (msg: string, mediaUrl?: string) => {
       await session.save();
-      const message = twiml.message(msg);
-      if (mediaUrl) message.media(mediaUrl);
-      return new NextResponse(twiml.toString(), { headers: { 'Content-Type': 'text/xml' } });
+      await sendWAMessage(from, msg, mediaUrl);
+      return new NextResponse('EVENT_RECEIVED', { status: 200 });
     };
 
-    // Global commands
+    // --- GLOBAL COMMANDS ---
     if (incomingMsg === 'change') {
       session.step = 'asking_location';
       session.restaurantId = null;
@@ -105,7 +176,7 @@ export async function POST(request: Request) {
       const newOrder = await Order.create({
         restaurantId: session.restaurantId,
         platform: 'whatsapp',
-        customerId: from.replace('whatsapp:', ''),
+        customerId: from, // Meta numbers are just the raw digits
         customerName: 'WhatsApp Customer',
         items: session.cart.map((item: any) => ({
           menuItemId: item._id,
@@ -126,8 +197,14 @@ export async function POST(request: Request) {
       let paymentInstructions = `✅ *Order Placed! (Status: Awaiting Payment)*\n\nOrder #${newOrder.orderNumber}\nTotal: ${process.env.RESTAURANT_CURRENCY_SYMBOL || '₹'}${totalAmount}`;
       
       if (restaurant?.paymentQrCodeUrl) {
+        // Construct the full URL if it's a relative local upload path
+        let qrUrl = restaurant.paymentQrCodeUrl;
+        if (qrUrl.startsWith('/uploads/')) {
+           const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://restaurants-order-bot.vercel.app';
+           qrUrl = `${baseUrl}${qrUrl}`;
+        }
         paymentInstructions += `\n\n💳 Please scan the QR code to pay ${process.env.RESTAURANT_CURRENCY_SYMBOL || '₹'}${totalAmount}. After paying, reply with a *screenshot* of your successful transaction.`;
-        return respond(paymentInstructions, restaurant.paymentQrCodeUrl);
+        return respond(paymentInstructions, qrUrl);
       } else if (restaurant?.paymentNumber) {
         paymentInstructions += `\n\n💳 Please send ${process.env.RESTAURANT_CURRENCY_SYMBOL || '₹'}${totalAmount} to WhatsApp Number: ${restaurant.paymentNumber}\n\nAfter paying, reply with a *screenshot* of your successful transaction.`;
         return respond(paymentInstructions);
@@ -137,20 +214,20 @@ export async function POST(request: Request) {
       }
     }
 
+    // --- STATE MACHINE ---
+
     if (session.step === 'awaiting_payment') {
-      const numMedia = parseInt(params.get('NumMedia') || '0');
-      
       if (incomingMsg === 'cancel') {
-         await Order.updateMany({ customerId: from.replace('whatsapp:', ''), status: 'awaiting_payment' }, { status: 'done', 'payment.paymentStatus': 'Failed' });
+         await Order.updateMany({ customerId: from, status: 'awaiting_payment' }, { status: 'done', 'payment.paymentStatus': 'Failed' });
          session.step = 'browsing_menu';
          session.cart = [];
          return respond('🚫 Order cancelled. Text "menu" to see items.');
       }
       
-      if (numMedia > 0) {
+      if (hasMedia) {
         // Assume they sent a screenshot
         await Order.updateMany(
-          { customerId: from.replace('whatsapp:', ''), status: 'awaiting_payment' },
+          { customerId: from, status: 'awaiting_payment' },
           { status: 'pending', 'payment.paymentStatus': 'Paid' }
         );
         session.step = 'browsing_menu';
@@ -161,10 +238,9 @@ export async function POST(request: Request) {
       }
     }
 
-    // State Machine
-    if (session.step === 'asking_location' || session.step === 'browsing_restaurants') { // Legacy support for 'browsing_restaurants' without location
+    if (session.step === 'asking_location' || session.step === 'browsing_restaurants') {
       if (latitude && longitude) {
-        session.location = { lat: parseFloat(latitude), lng: parseFloat(longitude) };
+        session.location = { lat: latitude, lng: longitude };
         session.step = 'selecting_restaurant';
         
         const restaurants = await Restaurant.find();
@@ -177,7 +253,6 @@ export async function POST(request: Request) {
               nearbyRestaurants.push({ ...r.toObject(), distance });
             }
           } else {
-             // Include restaurants without location for now to ensure backwards compatibility
              nearbyRestaurants.push({ ...r.toObject(), distance: 0 });
           }
         }
@@ -186,7 +261,6 @@ export async function POST(request: Request) {
           return respond('Sorry, there are no restaurants available within 3km of your location.');
         }
         
-        // Sort by distance
         nearbyRestaurants.sort((a, b) => a.distance - b.distance);
 
         let reply = '👋 *Nearby Restaurants (within 3km):*\n\nPlease select a restaurant by replying with its number:\n\n';
@@ -195,7 +269,6 @@ export async function POST(request: Request) {
            reply += `${idx + 1}. ${r.name}${distStr}\n`;
         });
         
-        // Save the nearby list order in session so they can select by number (simple implementation: we just re-fetch and re-sort when they send a number, but since it might change, it's a bit flaky. A better way is to rely on consistent DB sorting, but let's stick to simple re-fetch for now).
         return respond(reply);
       } else {
          if (session.step === 'asking_location') {
