@@ -122,8 +122,12 @@ export async function POST(request: Request) {
       await session.save();
       await sendWAMessage(from, msg, mediaUrl);
       
-      // We must return an empty 200 OK, otherwise Twilio will send the response text back to the user
-      return new NextResponse(null, { status: 200 });
+      // We must return valid empty TwiML so Twilio knows we processed the webhook successfully
+      const twiml = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
+      return new NextResponse(twiml, { 
+        status: 200,
+        headers: { 'Content-Type': 'text/xml' }
+      });
     };
 
     // --- GLOBAL COMMANDS ---
