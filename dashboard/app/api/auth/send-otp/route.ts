@@ -23,6 +23,7 @@ export async function POST(request: Request) {
     await Otp.create({ phone, otp: otpCode });
 
     let devOtpFallback = null;
+    let twilioErrorMsg = null;
 
     // Try sending SMS/WhatsApp via Twilio
     if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
@@ -39,15 +40,18 @@ export async function POST(request: Request) {
       } catch (twilioErr: any) {
         console.error('Twilio Error:', twilioErr.message);
         devOtpFallback = otpCode;
+        twilioErrorMsg = twilioErr.message;
       }
     } else {
       // Vercel doesn't have the env vars!
       devOtpFallback = otpCode;
+      twilioErrorMsg = "Missing TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN in environment variables.";
     }
 
     return NextResponse.json({ 
       msg: 'OTP sent successfully',
-      devOtp: devOtpFallback || otpCode // Always return it for now so they aren't blocked
+      devOtp: devOtpFallback || otpCode, // Always return it for now so they aren't blocked
+      twilioError: twilioErrorMsg
     });
   } catch (err: any) {
     console.error(err.message);

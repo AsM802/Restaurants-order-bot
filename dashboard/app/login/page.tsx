@@ -26,6 +26,10 @@ export default function LoginPage() {
       const { data } = await api.post('/auth/send-otp', { phone: fullPhone });
       setStep(2);
       
+      if (data.twilioError) {
+        alert(`TWILIO ERROR: ${data.twilioError}`);
+      }
+
       if (data.devOtp) {
         alert(`FOR TESTING: Your OTP is ${data.devOtp}`);
         setOtp(data.devOtp);
