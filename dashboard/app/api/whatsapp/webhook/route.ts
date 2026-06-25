@@ -85,6 +85,7 @@ export async function POST(request: Request) {
     const numMedia = parseInt(params.get('NumMedia') || '0', 10);
     const latitudeStr = params.get('Latitude');
     const longitudeStr = params.get('Longitude');
+    const isSimulator = params.get('Simulator') === 'true';
 
     if (!fromTwilio) {
       return new NextResponse('Not a Twilio Webhook', { status: 400 });
@@ -115,6 +116,13 @@ export async function POST(request: Request) {
     const respond = async (msg: string, mediaUrl?: string) => {
       await session.save();
       
+      if (isSimulator) {
+        return new NextResponse(JSON.stringify({ msg, mediaUrl }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
       try {
         await sendWAMessage(from, msg, mediaUrl);
       } catch (err: any) {
